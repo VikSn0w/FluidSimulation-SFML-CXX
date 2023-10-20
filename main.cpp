@@ -1,5 +1,7 @@
 #include <SFML/Window.hpp>
 #include <SFML/Graphics.hpp>
+#include <SFML/OpenGL.hpp>
+#include <SFML/Graphics/Shader.hpp>
 #include <chrono>
 #include <iomanip>
 
@@ -32,21 +34,50 @@ struct Velocity {
 };
 
 struct Particle {
-    sf::CircleShape drawing;
+    sf::CircleShape circle;
+    sf::RenderTexture renderTexture;
+    sf::Sprite sprite;
+    sf::Shader blurShader;
     Position position;
     Velocity velocity;
     double elastic_coefficient = 0.f;
     double mass = 0.f;
 
     // Constructor to initialize the particle
-    Particle(double r, double x, double y, double ec, double m) : drawing(r) {
+    Particle(double r, double x, double y, double ec, double m, double screen_x, double screen_y) : circle(r) {
         // Customize the particle's properties here if needed
-        drawing.setFillColor(sf::Color(127, 127, 255));
-        drawing.setPosition(x, y);
+        circle.setFillColor(sf::Color(14,135,204));
+        circle.setPosition(x, y);
         elastic_coefficient = ec;
-        position.x = drawing.getPosition().x;
-        position.y = drawing.getPosition().y;
+        position.x = x;
+        position.y = y;
         mass = m;
+
+        renderTexture.create(screen_x,screen_y);
+        renderTexture.clear(sf::Color::Transparent);
+
+        // Draw the circle shape to the render texture
+        renderTexture.draw(circle);
+        renderTexture.display();
+
+        // Load the Gaussian blur shader
+        if (!blurShader.loadFromFile("gaussian.frag", sf::Shader::Fragment))
+        {
+        }
+
+        // Set the shader parameters
+        blurShader.setUniform("source", renderTexture.getTexture());
+        blurShader.setUniform("offsetFactor", sf::Vector2f(2.0f / 500.0f, 2.0f / 500.0f)); // Adjust this value as needed
+
+        // Create a sprite to display the blurred texture
+        sprite = *new sf::Sprite(renderTexture.getTexture());
+    }
+
+    void setPosition(double x, double y){
+        circle.setPosition(x,y);
+        sprite.setPosition(x,y);
+        position.y = y;
+        position.x = x;
     }
 
 };
@@ -54,44 +85,58 @@ struct Particle {
 void updateParticle(Position &position, Velocity &velocity, double deltaTime, Particle &particle){
     velocity.y += (-GRAVITATIONAL_COSTANT*particle.mass) * -1 * deltaTime;
     position.y += velocity.y * deltaTime;
-    particle.drawing.setPosition(particle.drawing.getPosition().x, position.y);
+    particle.setPosition(particle.circle.getPosition().x, position.y);
     printf("y: %f\n", position.y);
 };
 
+void foo(Particle &particle,double x, double y){
+    particle.setPosition(x,y);
+    particle.position.y = y;
+    particle.position.x = x;
+}
+
 void checkForCollisions(Particle &particle){
-    double d = particle.drawing.getRadius()*2;
-    if(abs(particle.drawing.getPosition().x) > SCREEN_SIZE_X - d){
-        float x = SCREEN_SIZE_X*d * Sign(particle.drawing.getPosition().x);
+    double d = particle.circle.getRadius()*2;
+    if(abs(particle.circle.getPosition().x) > SCREEN_SIZE_X - d){
+        float x = SCREEN_SIZE_X*d * Sign(particle.circle.getPosition().x);
         particle.position.x = x;
-        particle.drawing.setPosition(x, particle.drawing.getPosition().y);
+        particle.circle.setPosition(x, particle.circle.getPosition().y);
         particle.velocity.x *= -1 * particle.elastic_coefficient;
     }
-    if(abs(particle.drawing.getPosition().y) > SCREEN_SIZE_Y - d){
-        float y = SCREEN_SIZE_Y - d * Sign(particle.drawing.getPosition().y);
+    if(abs(particle.circle.getPosition().y) > SCREEN_SIZE_Y - d){
+        float y = SCREEN_SIZE_Y - d * Sign(particle.circle.getPosition().y);
         particle.position.y = y;
-        particle.drawing.setPosition(particle.drawing.getPosition().x, y);
+        particle.circle.setPosition(particle.circle.getPosition().x, y);
         particle.velocity.y *= -1 * particle.elastic_coefficient;
     }
 }
 
 
 int main() {
-    sf::RenderWindow window(sf::VideoMode(SCREEN_SIZE_X, SCREEN_SIZE_Y), "FluidSimulation-SFML-CXX");
+    sf::ContextSettings settings;
+    settings.antialiasingLevel = 16.0;
+    sf::RenderWindow window(sf::VideoMode(SCREEN_SIZE_X, SCREEN_SIZE_Y), "FluidSimulation-SFML-CXX",  sf::Style::Close, settings);
     window.setFramerateLimit(FPS_LIMIT);
     sf::Clock frameClock;
 
-    Particle particle(PARTICLE_RADIUS, (window.getSize().x/2)-particle.drawing.getRadius(),(window.getSize().y/2)-particle.drawing.getRadius(), ELASTIC_COEFFICIENT, PARTICLE_MASS);
+    Particle particle(PARTICLE_RADIUS, 0,10, ELASTIC_COEFFICIENT, PARTICLE_MASS, window.getSize().x, window.getSize().y);
+
+    Velocity velocity;
+    Position position;
 
     while (window.isOpen()) {
         sf::Time frameTime = frameClock.restart(); // Get the time elapsed since the last frame
         float deltaTime = frameTime.asSeconds();
 
+        updateParticle(particle.position, particle.velocity, deltaTime, particle);
+
         window.clear(sf::Color::Black);
 
-        updateParticle(particle.position, particle.velocity, deltaTime, particle);
-        checkForCollisions(particle);
-
-        window.draw(particle.drawing);
+        velocity.y += (-GRAVITATIONAL_COSTANT*particle.mass) * -1 * deltaTime;
+        position.y += velocity.y * deltaTime;
+        foo(particle, 0, position.y);
+        printf("x: %f",particle.position.x);
+        window.draw(particle.sprite, &particle.blurShader);
         window.display();
 
         sf::Event event;

@@ -1,3 +1,0 @@
-/home/viksn0w/CLionProjects/GitHub/FluidSimulation-SFML-CXX/cmake-build-debug/_deps/sfml-subbuild/CMakeFiles/sfml-populate.dir
-/home/viksn0w/CLionProjects/GitHub/FluidSimulation-SFML-CXX/cmake-build-debug/_deps/sfml-subbuild/CMakeFiles/edit_cache.dir
-/home/viksn0w/CLionProjects/GitHub/FluidSimulation-SFML-CXX/cmake-build-debug/_deps/sfml-subbuild/CMakeFiles/rebuild_cache.dir

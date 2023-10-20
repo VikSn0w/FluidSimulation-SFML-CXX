@@ -12,5 +12,7 @@ FetchContent_MakeAvailable(SFML)
 add_executable(FluidSimulation-SFML-CXX main.cpp)
 target_link_libraries(FluidSimulation-SFML-CXX PRIVATE sfml-graphics)
 target_compile_features(FluidSimulation-SFML-CXX PRIVATE cxx_std_17)
+configure_file(gaussian.frag gaussian.frag COPYONLY)
+
 
 install(TARGETS FluidSimulation-SFML-CXX)
