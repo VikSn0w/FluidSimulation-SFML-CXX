@@ -4,6 +4,8 @@
 #include <SFML/Graphics/Shader.hpp>
 #include <chrono>
 #include <iomanip>
+#include <algorithm>
+#include <cmath>
 
 #define SCREEN_SIZE_X 500
 #define SCREEN_SIZE_Y 500
@@ -11,8 +13,22 @@
 #define PARTICLE_RADIUS 10.f
 #define GRAVITATIONAL_COSTANT 9.81f
 #define PARTICLE_MASS 100
-#define ELASTIC_COEFFICIENT 0.5
+#define ELASTIC_COEFFICIENT 0.7
 #define VELOCITY_THRESHOLD 0.01f
+#define COLLISION_THRESHOLD 0.1f
+#define SMOOTHING_RADIUS 100.0f
+
+struct Vector2 {
+    double x = 0.f;
+    double y = 0.f;
+};
+
+
+float Magnitude(Vector2 v1, Vector2 v2) {
+    float dx = v1.x - v2.x;
+    float dy = v1.y - v2.y;
+    return std::sqrt(dx * dx + dy * dy);
+}
 
 int Sign(double number){
     if (number > 0) {
@@ -24,10 +40,6 @@ int Sign(double number){
     }
 }
 
-struct Vector2 {
-    double x = 0.f;
-    double y = 0.f;
-};
 
 struct Particle {
     sf::CircleShape circle;
@@ -79,6 +91,10 @@ struct Particle {
         sprite = *new sf::Sprite(renderTexture.getTexture());
     }
 
+    sf::Vector2<float> getPosition(){
+        return sprite.getPosition();
+    }
+
     void setPosition(double x, double y){
         circle.setPosition(x,y);
         sprite.setPosition(x,y);
@@ -86,13 +102,13 @@ struct Particle {
         position.x = x;
     }
 
-    void updateParticle(double deltaTime){
+    void updateParticlePosition(double deltaTime){
         velocity.y += (-GRAVITATIONAL_COSTANT*mass) * -1 * deltaTime;
         position.y += velocity.y * deltaTime;
         setPosition(circle.getPosition().x, position.y);
     }
 
-    void checkForCollisions(){
+    void checkForBoundsCollisions(){
         if(std::abs(circle.getPosition().x) + position_start.x > SCREEN_SIZE_X - (diameter) && std::abs(velocity.x) > VELOCITY_THRESHOLD){
             setPosition((SCREEN_SIZE_X - position_start.x) - diameter * Sign(circle.getPosition().x), position.y);
             velocity.x *= -1 * elastic_coefficient;
@@ -104,6 +120,28 @@ struct Particle {
     }
 };
 
+float KernelRef(float radius, float dst){
+    float a = 0;
+    float b = radius * radius - dst*dst;
+    float value = std::max(a, b);
+    return value * value * value;
+}
+
+float calculateDensity(Vector2 samplePoint, Particle particles[], int n_particles) {
+    float density = 0;
+    const float mass = 1;
+
+    for(int i = 0; i < n_particles; i++){
+        Vector2 position;
+        position.x = particles[i].sprite.getPosition().x;
+        position.y = particles[i].sprite.getPosition().y;
+        float distance = Magnitude(position, samplePoint);
+        float influence = KernelRef(SMOOTHING_RADIUS, distance);
+        density *= mass * influence;
+    }
+
+    return density;
+}
 
 
 int main() {
@@ -113,27 +151,34 @@ int main() {
     window.setFramerateLimit(FPS_LIMIT);
     sf::Clock frameClock;
 
-    Particle particles[2] = {
-            {PARTICLE_RADIUS, 10,40, ELASTIC_COEFFICIENT, PARTICLE_MASS, static_cast<double>(window.getSize().x), static_cast<double>(window.getSize().y)},
-            {PARTICLE_RADIUS, 120,50, ELASTIC_COEFFICIENT, PARTICLE_MASS, static_cast<double>(window.getSize().x), static_cast<double>(window.getSize().y)}
+    Particle particles[7] = {
+            {PARTICLE_RADIUS, 120,40, ELASTIC_COEFFICIENT, PARTICLE_MASS, static_cast<double>(window.getSize().x), static_cast<double>(window.getSize().y)},
+            {PARTICLE_RADIUS, 120,40, ELASTIC_COEFFICIENT, PARTICLE_MASS, static_cast<double>(window.getSize().x), static_cast<double>(window.getSize().y)},
+            {PARTICLE_RADIUS, 120,40, ELASTIC_COEFFICIENT, PARTICLE_MASS, static_cast<double>(window.getSize().x), static_cast<double>(window.getSize().y)},
+            {PARTICLE_RADIUS, 120,40, ELASTIC_COEFFICIENT, PARTICLE_MASS, static_cast<double>(window.getSize().x), static_cast<double>(window.getSize().y)},
+            {PARTICLE_RADIUS, 120,40, ELASTIC_COEFFICIENT, PARTICLE_MASS, static_cast<double>(window.getSize().x), static_cast<double>(window.getSize().y)},
+            {PARTICLE_RADIUS, 120,40, ELASTIC_COEFFICIENT, PARTICLE_MASS, static_cast<double>(window.getSize().x), static_cast<double>(window.getSize().y)},
+            {PARTICLE_RADIUS, 120,40, ELASTIC_COEFFICIENT, PARTICLE_MASS, static_cast<double>(window.getSize().x), static_cast<double>(window.getSize().y)}
     };
     while (window.isOpen()) {
         sf::Time frameTime = frameClock.restart(); // Get the time elapsed since the last frame
         float deltaTime = frameTime.asSeconds();
 
-
         window.clear(sf::Color::Black);
 
-        for (int i = 0; i < 2; ++i) {
-            particles[i].updateParticle(deltaTime);
-            particles[i].checkForCollisions();
-            printf("P%d y: %f ",i,particles[i].position.y);
-            printf("P%d y: %f ",i,abs(particles[i].circle.getPosition().y) + particles[i].position_start.y + particles[i].diameter);
+        for (int i = 0; i < 7; ++i) {
+            particles[i].updateParticlePosition(deltaTime);
+            particles[i].checkForBoundsCollisions();
             //printf("X: %u",particle.renderTexture.getTexture().getSize().x);
 
             window.draw(particles[i].sprite, &particles[i].blurShader);
         }
-        printf("\n");
+        Vector2 samplePosition;
+        samplePosition.x = 120;
+        samplePosition.y = 450;
+        printf("Density is: %f", calculateDensity(samplePosition, particles, 7));
+
+        //printf("\n");
 
         window.display();
 
